@@ -40,11 +40,22 @@ export const AuthProvider = ({ children }) => {
 
   const signup = async (name, email, password) => {
     try {
+      console.log('🔄 Attempting signup for:', email);
       const response = await axios.post('http://localhost:3002/signup', {
         name,
         email,
         password
       });
+      
+      console.log('✅ Signup response:', response.data);
+      
+      if (!response.data || !response.data.token || !response.data.user) {
+        console.error('❌ Invalid response format:', response.data);
+        return {
+          success: false,
+          error: 'Invalid response from server'
+        };
+      }
       
       const { token: newToken, user: newUser } = response.data;
       setToken(newToken);
@@ -54,9 +65,36 @@ export const AuthProvider = ({ children }) => {
       
       return { success: true };
     } catch (error) {
+      console.error('❌ Signup error:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      console.error('❌ Error message:', error.message);
+      
+      // Handle different error types
+      if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
+        return {
+          success: false,
+          error: 'Cannot connect to server. Please make sure the backend is running on port 3002.'
+        };
+      }
+      
+      if (error.response?.status === 400) {
+        return {
+          success: false,
+          error: error.response.data?.error || 'Invalid signup data'
+        };
+      }
+      
+      if (error.response?.status === 500) {
+        return {
+          success: false,
+          error: error.response.data?.error || 'Server error. Please try again later.'
+        };
+      }
+      
       return {
         success: false,
-        error: error.response?.data?.error || 'Signup failed'
+        error: error.response?.data?.error || error.message || 'Signup failed. Please try again.'
       };
     }
   };

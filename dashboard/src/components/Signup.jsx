@@ -17,21 +17,39 @@ const Signup = () => {
     setError('');
     setLoading(true);
 
-    if (password.length < 6) {
+    // Client-side validation
+    if (!name || !name.trim()) {
+      setError('Name is required');
+      setLoading(false);
+      return;
+    }
+
+    if (!email || !email.trim()) {
+      setError('Email is required');
+      setLoading(false);
+      return;
+    }
+
+    if (!password || password.length < 6) {
       setError('Password must be at least 6 characters long');
       setLoading(false);
       return;
     }
 
-    const result = await signup(name, email, password);
-    
-    if (result.success) {
-      navigate('/');
-    } else {
-      setError(result.error);
+    try {
+      const result = await signup(name.trim(), email.trim(), password);
+      
+      if (result && result.success) {
+        navigate('/');
+      } else {
+        setError(result?.error || 'Signup failed. Please try again.');
+      }
+    } catch (err) {
+      console.error('Signup error in component:', err);
+      setError('An unexpected error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (
