@@ -1,0 +1,221 @@
+import React, { useState, useContext, useEffect } from "react";
+
+import axios from "axios";
+
+import GeneralContext from "./GeneralContext";
+
+import "./BuyActionWindow.css";
+
+const BuyActionWindow = ({ stock }) => {
+  // Debug: Log the stock object when component mounts or stock changes
+  useEffect(() => {
+    console.log("📦 BuyActionWindow - Stock received:", stock);
+    if (!stock) {
+      console.error("❌ BuyActionWindow - No stock object received!");
+    } else if (!stock.name) {
+      console.error("❌ BuyActionWindow - Stock object missing 'name' property:", stock);
+    }
+  }, [stock]);
+
+  // Extract price from stock object, default to 0 if not available
+  const defaultPrice = stock?.price ? parseFloat(stock.price) : 0;
+  
+  const [stockQuantity, setStockQuantity] = useState(1);
+  const [stockPrice, setStockPrice] = useState(defaultPrice);
+  const [isLoading, setIsLoading] = useState(false);
+  const generalContext = useContext(GeneralContext);
+
+  // Update price when stock changes
+  useEffect(() => {
+    if (stock?.price) {
+      setStockPrice(parseFloat(stock.price));
+    }
+  }, [stock]);
+
+  const handleBuyClick = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Debug: Log stock object before validation
+    console.log("🛒 Buy button clicked - Stock object:", stock);
+    console.log("🛒 Stock name:", stock?.name);
+    console.log("🛒 Stock price:", stock?.price);
+    
+    // Check if stock exists
+    if (!stock) {
+      alert("❌ Error: Stock information is missing. Please try clicking the Buy button again from the watchlist.");
+      console.error("Stock is null or undefined");
+      return;
+    }
+    
+    // Get stock name - use name from stock object
+    const stockName = stock.name || stock.instrument || stock.symbol || "";
+    
+    if (!stockName || !stockName.trim()) {
+      alert(`❌ Error: Stock name is missing.\n\nReceived stock object: ${JSON.stringify(stock, null, 2)}\n\nPlease try clicking the Buy button again from the watchlist.`);
+      console.error("Stock name is missing. Full stock object:", stock);
+      return;
+    }
+    
+    // Validation - check for valid numbers, not just truthy values
+    const qty = Number(stockQuantity);
+    const price = Number(stockPrice);
+    
+    if (!qty || qty <= 0 || isNaN(qty)) {
+      alert("Please enter a valid quantity (greater than 0)");
+      return;
+    }
+    
+    if (!price || price <= 0 || isNaN(price)) {
+      alert("Please enter a valid price (greater than 0)");
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      const orderData = {
+        name: stockName,
+        qty: qty,
+        price: price,
+        mode: "BUY",
+      };
+      
+      console.log("🛒 Sending order to backend:", orderData);
+      
+      const response = await axios.post("http://localhost:3002/newOrder", orderData, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000, // 10 second timeout
+      });
+      
+      // Handle authentication errors
+      if (response.status === 401 || response.status === 403) {
+        alert('Session expired. Please login again.');
+        window.location.href = '/login';
+        return;
+      }
+      
+      console.log("✅ Order placed successfully:", response.data);
+      alert(`✅ Order placed successfully!\n\nStock: ${stockName}\nQuantity: ${qty}\nPrice: ₹${price}\nTotal: ₹${(qty * price).toFixed(2)}`);
+      
+      // Reset form
+      setStockQuantity(1);
+      
+      // Close window after short delay
+      setTimeout(() => {
+        if (generalContext && generalContext.closeBuyWindow) {
+          generalContext.closeBuyWindow();
+        }
+      }, 500);
+      
+    } catch (error) {
+      console.error("❌ Error placing order:", error);
+      console.error("Error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      
+      const errorMessage = error.response?.data?.error || 
+                          error.response?.data?.message || 
+                          error.message || 
+                          "Unknown error occurred";
+      
+      alert(`❌ Failed to place order:\n\n${errorMessage}\n\nPlease try again or check if the backend server is running.`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (generalContext && generalContext.closeBuyWindow) {
+      generalContext.closeBuyWindow();
+    }
+  };
+
+  // Display stock name for debugging (visible in UI)
+  const displayStockName = stock?.name || stock?.instrument || stock?.symbol || 'Unknown Stock';
+  
+  if (!stock) {
+    console.error("❌ BuyActionWindow rendered without stock prop");
+    return (
+      <div className="container" id="buy-window">
+        <div className="header">
+          <h3>Error: No stock selected</h3>
+        </div>
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <p>Please select a stock from the watchlist to place an order.</p>
+          <button onClick={handleCancelClick}>Close</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container" id="buy-window" draggable="true">
+      <div className="header">
+        <h3>Buy {displayStockName}</h3>
+        <p style={{ fontSize: '0.8rem', margin: '5px 0 0 0', color: '#666' }}>
+          Current Price: ₹{stock?.price || '0.00'}
+        </p>
+      </div>
+      <div className="regular-order">
+        <div className="inputs">
+          <fieldset>
+            <legend>Qty.</legend>
+            <input
+              type="number"
+              name="qty"
+              id="qty"
+              min="1"
+              onChange={(e) => setStockQuantity(e.target.value)}
+              value={stockQuantity}
+              disabled={isLoading}
+            />
+          </fieldset>
+          <fieldset>
+            <legend>Price</legend>
+            <input
+              type="number"
+              name="price"
+              id="price"
+              step="0.05"
+              min="0"
+              onChange={(e) => setStockPrice(e.target.value)}
+              value={stockPrice}
+              disabled={isLoading}
+            />
+          </fieldset>
+        </div>
+      </div>
+
+      <div className="buttons">
+        <span>Margin required ₹{(stockQuantity * stockPrice).toFixed(2) || '0.00'}</span>
+        <div>
+          <button 
+            className="btn btn-blue" 
+            onClick={handleBuyClick} 
+            type="button"
+            disabled={isLoading}
+          >
+            {isLoading ? "Processing..." : "Buy"}
+          </button>
+          <button 
+            className="btn btn-grey" 
+            onClick={handleCancelClick} 
+            type="button"
+            disabled={isLoading}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default BuyActionWindow;
