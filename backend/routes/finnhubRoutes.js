@@ -1,21 +1,44 @@
 const express = require('express');
-const finnhub = require('finnhub');
 const router = express.Router();
 
 // Setup Finnhub API client - Initialize only if API key exists
 let finnhubClient = null;
+let finnhub = null;
 
 try {
   if (process.env.FINNHUB_API_KEY) {
-    const api_key = finnhub.ApiClient.instance.authentications['api_key'];
-    api_key.apiKey = process.env.FINNHUB_API_KEY;
-    finnhubClient = new finnhub.DefaultApi();
+    finnhub = require('finnhub');
+    
+    // Check if ApiClient exists and is properly structured
+    if (finnhub && finnhub.ApiClient) {
+      try {
+        // Try to access the instance safely
+        if (finnhub.ApiClient.instance && finnhub.ApiClient.instance.authentications) {
+          const api_key = finnhub.ApiClient.instance.authentications['api_key'];
+          if (api_key) {
+            api_key.apiKey = process.env.FINNHUB_API_KEY;
+            finnhubClient = new finnhub.DefaultApi();
+            console.log('✅ Finnhub client initialized successfully');
+          } else {
+            console.warn('⚠️ Finnhub api_key authentication not found');
+          }
+        } else {
+          console.warn('⚠️ Finnhub ApiClient.instance structure not found');
+        }
+      } catch (initErr) {
+        console.warn('⚠️ Error accessing Finnhub ApiClient:', initErr.message);
+      }
+    } else {
+      console.warn('⚠️ Finnhub ApiClient not found in package');
+    }
   } else {
     console.warn('⚠️ FINNHUB_API_KEY not found in .env - Finnhub routes will return errors');
   }
 } catch (err) {
-  console.error('❌ Error initializing Finnhub client:', err.message);
-  console.warn('⚠️ Finnhub routes will not work until API key is configured');
+  console.error('❌ Error loading Finnhub package:', err.message);
+  console.warn('⚠️ Finnhub routes will not work - server will continue without Finnhub features');
+  // Don't crash the server - just disable Finnhub features
+  finnhubClient = null;
 }
 
 // Get real-time quote for a symbol
