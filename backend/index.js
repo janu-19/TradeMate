@@ -23,9 +23,17 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Import Finnhub routes
-const finnhubRoutes = require('./routes/finnhubRoutes');
-app.use('/api/finnhub', finnhubRoutes);
+// Chrome DevTools occasionally probes this endpoint; respond gracefully to avoid CSP warnings
+app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
+  res.setHeader('Content-Security-Policy', "default-src 'self'");
+  res.status(204).end();
+});
+
+app.get('/', (req, res) => {
+  res.setHeader('Content-Security-Policy', "default-src 'self'");
+  res.status(200).json({ status: 'TradeMate API running' });
+});
+
 //   app.get('/addHolding', async (req, res) => {
 //     try {
 //       let tempHoldings = [
@@ -321,8 +329,6 @@ mongoose.connect(MONGO_URL)
       console.log(`   GET  http://localhost:${PORT}/allPositions (Protected)`);
       console.log(`   GET  http://localhost:${PORT}/allOrders (Protected)`);
       console.log(`   POST http://localhost:${PORT}/newOrder (Protected)`);
-      console.log(`   GET  http://localhost:${PORT}/api/finnhub/quote/:symbol`);
-      console.log(`   POST http://localhost:${PORT}/api/finnhub/quotes`);
     });
   })
   .catch(err => {

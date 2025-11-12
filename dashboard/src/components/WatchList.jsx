@@ -1,5 +1,4 @@
-import React, { useState, useContext, useEffect } from "react";
-import axios from "axios";
+import React, { useState, useContext } from "react";
 import GeneralContext from "./GeneralContext";
 
 import { watchlist } from "../data/data";
@@ -23,105 +22,9 @@ const MoreHoriz = ({ className }) => (
 
 const WatchList = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [livePrices, setLivePrices] = useState({});
-  const [isLoadingPrices, setIsLoadingPrices] = useState(false);
-
-  // Fetch real-time prices from Finnhub - Optimized
-  useEffect(() => {
-    let isMounted = true;
-    let timeoutId = null;
-
-    const fetchLivePrices = async () => {
-      if (!isMounted) return;
-      
-      setIsLoadingPrices(true);
-      try {
-        // Get all unique stock symbols (limit to first 10 for faster performance)
-        const symbols = [...new Set(watchlist.map(stock => stock.name))].slice(0, 10);
-        
-        // Fetch quotes for all symbols in batch with shorter timeout
-        const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
-
-        const response = await axios.post(
-          "http://localhost:3002/api/finnhub/quotes",
-          { symbols },
-          { 
-            signal: controller.signal,
-            timeout: 3000 // 3 second timeout for faster response
-          }
-        );
-
-        if (isMounted && response.data && response.data.quotes) {
-          const priceMap = {};
-          let successCount = 0;
-          
-          response.data.quotes.forEach(({ symbol, data, error }) => {
-            if (data && !error && data.c) {
-              // Finnhub returns: c (current price), d (change), dp (percent change)
-              priceMap[symbol] = {
-                price: data.c || 0,
-                change: data.d || 0,
-                percentChange: data.dp || 0,
-                isDown: (data.d || 0) < 0
-              };
-              successCount++;
-            }
-          });
-          
-          if (successCount > 0) {
-            setLivePrices(priceMap);
-          }
-        }
-      } catch (error) {
-        if (error.name !== 'AbortError' && error.name !== 'CanceledError') {
-          console.error("Error fetching live prices:", error.message);
-        }
-        // Continue with static data if API fails
-      } finally {
-        if (isMounted) {
-          setIsLoadingPrices(false);
-        }
-        if (timeoutId) clearTimeout(timeoutId);
-      }
-    };
-
-    // Fetch immediately
-    fetchLivePrices();
-
-    // Update every 10 seconds (reduced frequency to avoid rate limits)
-    const interval = setInterval(() => {
-      if (isMounted) {
-        fetchLivePrices();
-      }
-    }, 10000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, []);
-
-  // Merge static watchlist with live prices
-  const enhancedWatchlist = watchlist.map(stock => {
-    const liveData = livePrices[stock.name];
-    if (liveData) {
-      return {
-        ...stock,
-        price: liveData.price,
-        percent: liveData.percentChange >= 0 
-          ? `+${liveData.percentChange.toFixed(2)}%` 
-          : `${liveData.percentChange.toFixed(2)}%`,
-        isDown: liveData.isDown,
-        isLive: true
-      };
-    }
-    return { ...stock, isLive: false };
-  });
 
   // Filter watchlist based on search query
-  const filteredWatchlist = enhancedWatchlist.filter((stock) => {
+  const filteredWatchlist = watchlist.filter((stock) => {
     if (!searchQuery.trim()) {
       return true; // Show all if search is empty
     }
@@ -183,15 +86,14 @@ const WatchList = () => {
         </div>
         <span className="counts">
           {filteredWatchlist.length} / {watchlist.length}
-          {isLoadingPrices && <span style={{ marginLeft: '5px', fontSize: '10px', color: '#999' }}>🔄</span>}
         </span>
       </div>
 
       <ul className="list">
         {filteredWatchlist.length > 0 ? (
-          filteredWatchlist.map((stock, index) => {
-            return <WatchListItem stock={stock} key={index} />;
-          })
+          filteredWatchlist.map((stock, index) => (
+            <WatchListItem stock={stock} key={index} />
+          ))
         ) : (
           <li style={{ 
             padding: '20px', 
@@ -223,7 +125,6 @@ const WatchListItem = ({ stock }) => {
       <div className="item">
         <p className={stock.isDown ? "down" : "up"}>
           {stock.name}
-          {stock.isLive && <span style={{ fontSize: '8px', marginLeft: '4px', color: '#28a745' }}>●</span>}
         </p>
         <div className="itemInfo">
           <span className="percent">{stock.percent}</span>
